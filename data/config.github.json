@@ -1,9 +1,9 @@
 {
   "version": "1.0",
   "ai": {
-    "provider": "openai",
-    "model": "gpt-4",
-    "api_key_env": "OPENAI_API_KEY",
+    "provider": "deepseek",
+    "model": "deepseek-v4-pro",
+    "api_key_env": "DEEPSEEK_API_KEY",
     "temperature": 0.3,
     "max_tokens": 4096,
     "throttle_sec": 0,
@@ -55,7 +55,7 @@
       }
     ],
     "reddit": {
-      "enabled": true,
+      "enabled": false,
       "subreddits": [
         {
           "subreddit": "MachineLearning",
@@ -77,7 +77,7 @@
       "fetch_comments": 5
     },
     "twitter": {
-      "enabled": false,
+      "enabled": true,
       "users": ["karpathy", "ylecun"],
       "fetch_limit": 10,
       "fetch_reply_text": false,
@@ -96,7 +96,7 @@
           "provider": "yfinance",
           "fetch_limit": 20,
           "category": "equities",
-          "symbols": ["AAPL", "MSFT", "NVDA", "GOOGL", "AMZN", "META", "TSLA"]
+          "symbols": ["NVDA", "GOOGL", "AMZN", "META", "MU"]
         }
       ]
     },
