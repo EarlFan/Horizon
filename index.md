@@ -19,13 +19,28 @@ title: Home
 
 <ul>
   {% assign zh_posts = site.posts | where: "lang", "zh" %}
-  {% for post in zh_posts limit:20 %}
-    <li>
-      <a href="{{ post.url | relative_url }}">{{ post.date | date: "%Y-%m-%d" }}</a>
-    </li>
-  {% else %}
-    <li><em>暂无内容</em></li>
+  {% assign zh_count = 0 %}
+  {% for post in zh_posts %}
+    {% assign post_date = post.date | date: "%Y-%m-%d" %}
+    {% assign path_parts = post.url | split: "/" %}
+    {% assign post_file = path_parts[4] | default: "" %}
+    {% if post.url contains "gmail-summary" %}
+      {% assign zh_count = zh_count | plus: 1 %}
+      <li><a href="{{ post.url | relative_url }}">{{ post_date }} gmail总结</a></li>
+    {% elsif post_file contains "-summary-" %}
+      {% assign run_time = post_file | split: "-" | first %}
+      {% assign run_hour = run_time | slice: 0, 2 %}
+      {% assign run_minute = run_time | slice: 2, 2 %}
+      {% assign zh_count = zh_count | plus: 1 %}
+      <li><a href="{{ post.url | relative_url }}">{{ post_date }} {{ run_hour }}:{{ run_minute }} AI新闻</a></li>
+    {% endif %}
+    {% if zh_count >= 20 %}
+      {% break %}
+    {% endif %}
   {% endfor %}
+  {% if zh_count == 0 %}
+    <li><em>暂无内容</em></li>
+  {% endif %}
 </ul>
 
 </div>
@@ -44,13 +59,28 @@ Welcome to [Horizon](https://github.com/thysrael/Horizon), an AI-driven informat
 
 <ul>
   {% assign en_posts = site.posts | where: "lang", "en" %}
-  {% for post in en_posts limit:20 %}
-    <li>
-      <a href="{{ post.url | relative_url }}">{{ post.date | date: "%Y-%m-%d" }}</a>
-    </li>
-  {% else %}
-    <li><em>No posts yet</em></li>
+  {% assign en_count = 0 %}
+  {% for post in en_posts %}
+    {% assign post_date = post.date | date: "%Y-%m-%d" %}
+    {% assign path_parts = post.url | split: "/" %}
+    {% assign post_file = path_parts[4] | default: "" %}
+    {% if post.url contains "gmail-summary" %}
+      {% assign en_count = en_count | plus: 1 %}
+      <li><a href="{{ post.url | relative_url }}">{{ post_date }} Gmail digest</a></li>
+    {% elsif post_file contains "-summary-" %}
+      {% assign run_time = post_file | split: "-" | first %}
+      {% assign run_hour = run_time | slice: 0, 2 %}
+      {% assign run_minute = run_time | slice: 2, 2 %}
+      {% assign en_count = en_count | plus: 1 %}
+      <li><a href="{{ post.url | relative_url }}">{{ post_date }} {{ run_hour }}:{{ run_minute }} AI news</a></li>
+    {% endif %}
+    {% if en_count >= 20 %}
+      {% break %}
+    {% endif %}
   {% endfor %}
+  {% if en_count == 0 %}
+    <li><em>No posts yet</em></li>
+  {% endif %}
 </ul>
 
 </div>
