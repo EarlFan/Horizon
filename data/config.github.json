@@ -22,19 +22,7 @@
     "unsubscribe_keyword": "UNSUBSCRIBE"
   },
   "sources": {
-    "github": [
-      {
-        "type": "user_events",
-        "username": "torvalds",
-        "enabled": true
-      },
-      {
-        "type": "repo_releases",
-        "owner": "astral-sh",
-        "repo": "uv",
-        "enabled": true
-      }
-    ],
+    "github": [],
     "hackernews": {
       "enabled": true,
       "fetch_top_stories": 20,
@@ -46,16 +34,10 @@
         "url": "https://simonwillison.net/atom/everything/",
         "enabled": true,
         "category": "ai-tools"
-      },
-      {
-        "name": "LWN.net (subscriber full-text)",
-        "url": "https://lwn.net/headlines/full_text?key=${LWN_KEY}",
-        "enabled": false,
-        "category": "linux"
       }
     ],
     "reddit": {
-      "enabled": false,
+      "enabled": true,
       "subreddits": [
         {
           "subreddit": "MachineLearning",
@@ -66,19 +48,12 @@
           "min_score": 50
         }
       ],
-      "users": [
-        {
-          "username": "iamthatis",
-          "enabled": true,
-          "sort": "new",
-          "fetch_limit": 10
-        }
-      ],
+      "users": [],
       "fetch_comments": 5
     },
     "twitter": {
-      "enabled": true,
-      "users": ["karpathy", "ylecun"],
+      "enabled": false,
+      "users": [],
       "fetch_limit": 10,
       "fetch_reply_text": false,
       "max_replies_per_tweet": 3,
@@ -86,24 +61,36 @@
       "reply_min_likes": 5
     },
     "openbb": {
-      "enabled": false,
+      "enabled": true,
       "fetch_filings": false,
       "filings_provider": "sec",
       "watchlists": [
         {
-          "name": "megacaps",
+          "name": "openbb-stock-watchlist",
           "enabled": true,
           "provider": "yfinance",
           "fetch_limit": 20,
           "category": "equities",
-          "symbols": ["NVDA", "GOOGL", "AMZN", "META", "MU"]
+          "symbols": [
+            "AMD",
+            "GOOG",
+            "NVDA",
+            "INTC",
+            "META",
+            "AAPL",
+            "MSFT"
+          ]
         }
       ]
     },
     "ossinsight": {
       "enabled": false,
       "period": "past_24_hours",
-      "languages": ["All", "Python", "TypeScript"],
+      "languages": [
+        "All",
+        "Python",
+        "TypeScript"
+      ],
       "keywords": [],
       "min_stars": 10,
       "max_items": 30
@@ -112,10 +99,21 @@
   "filtering": {
     "ai_score_threshold": 6.0,
     "time_window_hours": 24,
-    "max_items": null,
-    "category_groups": {},
-    "default_group": "other",
-    "default_group_limit": null
+    "max_items": 18,
+    "source_min_items": {
+      "openbb": 9
+    },
+    "category_groups": {
+      "stock": {
+        "name": "股票新闻",
+        "limit": 9,
+        "categories": [
+          "equities"
+        ]
+      }
+    },
+    "default_group": "tech",
+    "default_group_limit": 9
   },
   "webhook": {
     "enabled": false,
