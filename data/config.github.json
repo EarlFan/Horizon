@@ -7,8 +7,8 @@
     "temperature": 0.3,
     "max_tokens": 4096,
     "throttle_sec": 0,
-    "analysis_concurrency": 1,
-    "enrichment_concurrency": 1,
+    "analysis_concurrency": 2,
+    "enrichment_concurrency": 2,
     "languages": [
       "zh",
       "en"
