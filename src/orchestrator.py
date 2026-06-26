@@ -4,6 +4,7 @@ import asyncio
 from collections import defaultdict
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
 from typing import List, Dict, Optional
 from urllib.parse import urlparse
 import httpx
@@ -129,7 +130,10 @@ class HorizonOrchestrator:
 
             # 5.7 Apply per-category and global digest limits before enrichment
             balanced_result = self.apply_balanced_digest(important_items)
-            important_items = balanced_result.items
+            important_items = self.apply_source_minimums(
+                balanced_result.items,
+                analyzed_items,
+            )
 
             # Show per-sub-source selection breakdown
             selected_counts: Dict[str, int] = defaultdict(int)
@@ -144,7 +148,9 @@ class HorizonOrchestrator:
             await self._enrich_important_items(important_items)
 
             # 7. Generate and save daily summaries for each configured language
-            today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+            run_time = datetime.now(timezone.utc).astimezone(ZoneInfo("Asia/Hong_Kong"))
+            today = run_time.strftime("%Y-%m-%d")
+            run_slot = run_time.strftime("%H%M")
             for lang in self.config.ai.languages:
                 summarizer = DailySummarizer()
                 summary = await summarizer.generate_summary(important_items, today, len(all_items), language=lang)
@@ -157,7 +163,7 @@ class HorizonOrchestrator:
                 try:
                     from pathlib import Path
 
-                    post_filename = f"{today}-summary-{lang}.md"
+                    post_filename = f"{today}-{run_slot}-summary-{lang}.md"
                     posts_dir = Path("docs/_posts")
                     posts_dir.mkdir(parents=True, exist_ok=True)
 
@@ -167,7 +173,8 @@ class HorizonOrchestrator:
                     front_matter = (
                         "---\n"
                         "layout: default\n"
-                        f"title: \"Horizon Summary: {today} ({lang.upper()})\"\n"
+                        f"title: \"Horizon Summary: {today} {run_slot} ({lang.upper()})\"\n"
+                        f"permalink: /{run_time:%Y}/{run_time:%m}/{run_time:%d}/{run_slot}-summary-{lang}.html\n"
                         f"date: {today}\n"
                         f"lang: {lang}\n"
                         "---\n\n"
@@ -594,6 +601,87 @@ class HorizonOrchestrator:
             group_limits=group_limits,
             duplicate_categories=sorted(set(duplicate_categories)),
         )
+
+    def apply_source_minimums(
+        self,
+        selected_items: List[ContentItem],
+        candidate_items: List[ContentItem],
+        *,
+        log: bool = True,
+    ) -> List[ContentItem]:
+        """Backfill selected items to satisfy configured per-source minimums."""
+        minimums = getattr(self.config.filtering, "source_min_items", {})
+        if not minimums:
+            return selected_items
+
+        selected = list(selected_items)
+        selected_ids = {item.id for item in selected}
+        selected_urls = {str(item.url) for item in selected}
+        max_items = self.config.filtering.max_items
+
+        for source_key, minimum in minimums.items():
+            current = sum(
+                1 for item in selected if item.source_type.value == source_key
+            )
+            if current >= minimum:
+                continue
+
+            needed = minimum - current
+            candidates = sorted(
+                (
+                    item
+                    for item in candidate_items
+                    if item.source_type.value == source_key
+                    and item.id not in selected_ids
+                    and str(item.url) not in selected_urls
+                    and (item.ai_score or 0) > 0
+                ),
+                key=lambda item: item.ai_score or 0,
+                reverse=True,
+            )
+
+            added = 0
+            for item in candidates:
+                if added >= needed:
+                    break
+                selected.append(item)
+                selected_ids.add(item.id)
+                selected_urls.add(str(item.url))
+                added += 1
+
+            if log and added:
+                self.console.print(
+                    f"📌 Added {added} {source_key} item(s) to satisfy "
+                    f"minimum {minimum}"
+                )
+
+        if max_items is not None and len(selected) > max_items:
+            protected_sources = set(minimums)
+            protected: List[ContentItem] = []
+            flexible: List[ContentItem] = []
+            for item in sorted(
+                selected,
+                key=lambda candidate: candidate.ai_score or 0,
+                reverse=True,
+            ):
+                source_key = item.source_type.value
+                protected_count = sum(
+                    1
+                    for protected_item in protected
+                    if protected_item.source_type.value == source_key
+                )
+                if (
+                    source_key in protected_sources
+                    and protected_count < minimums[source_key]
+                ):
+                    protected.append(item)
+                else:
+                    flexible.append(item)
+
+            selected = (protected + flexible)[:max_items]
+
+        selected.sort(key=lambda item: item.ai_score or 0, reverse=True)
+        return selected
 
     async def _expand_twitter_discussion(self, items: List[ContentItem]) -> None:
         """Second-stage: fetch reply text for important Twitter items and re-analyze.
