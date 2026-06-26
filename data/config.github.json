@@ -32,16 +32,9 @@
       "fetch_top_stories": 20,
       "min_score": 100
     },
-    "rss": [
-      {
-        "name": "Simon Willison",
-        "url": "https://simonwillison.net/atom/everything/",
-        "enabled": true,
-        "category": "ai-tools"
-      }
-    ],
+    "rss": [],
     "reddit": {
-      "enabled": true,
+      "enabled": false,
       "subreddits": [
         {
           "subreddit": "MachineLearning",
