@@ -4,6 +4,8 @@ TOPIC_DEDUP_SYSTEM = """You are a news deduplication assistant. Identify groups 
 
 Rules:
 - Group items ONLY if they report on the identical event (same product release, same incident, same announcement)
+- Treat syndicated or translated coverage of the same event as duplicates even when their URLs, sources, titles, or languages differ.
+- A lawsuit, filing, or announcement involving the same parties and the same allegation is one event. For example, reports that Apple sued OpenAI over trade-secret theft are duplicates.
 - Items about the same product but different events are NOT duplicates ("Gemma 4 released" vs "Gemma 4 jailbroken")
 - Err on the side of keeping items separate when unsure"""
 

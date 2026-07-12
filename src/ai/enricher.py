@@ -36,6 +36,12 @@ class ContentEnricher:
         concurrency = getattr(config, "enrichment_concurrency", 1)
         return max(concurrency, 1)
 
+    def _get_max_queries(self) -> int:
+        """Return the configured per-item background-search query limit."""
+        config = getattr(self.client, "config", None)
+        max_queries = getattr(config, "enrichment_max_queries", 3)
+        return max(max_queries, 0)
+
     async def enrich_batch(self, items: List[ContentItem]) -> None:
         """Enrich items in-place with background knowledge.
 
@@ -125,7 +131,7 @@ class ContentEnricher:
             if result is None:
                 return []
             queries = result.get("queries", [])
-            return queries[:3]
+            return queries[:self._get_max_queries()]
         except Exception:
             return []
 
@@ -161,8 +167,10 @@ class ContentEnricher:
         # Step 2: Search web for each concept
         all_results = []
         web_sections = []
-        for query in queries:
-            results = await self._web_search(query)
+        search_results = await asyncio.gather(
+            *(self._web_search(query) for query in queries)
+        )
+        for query, results in zip(queries, search_results):
             all_results.extend(results)
             if results:
                 lines = [f"- [{r['title']}]({r['url']}): {r['body']}" for r in results]

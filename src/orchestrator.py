@@ -1,6 +1,8 @@
 """Main orchestrator coordinating the entire workflow."""
 
 import asyncio
+from time import perf_counter
+import re
 from collections import defaultdict
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
@@ -68,6 +70,7 @@ class HorizonOrchestrator:
             force_hours: Optional override for time window in hours
         """
         self.console.print("[bold cyan]🌅 Horizon - Starting aggregation...[/bold cyan]\n")
+        run_started = perf_counter()
 
         # Check email subscriptions if configured
         if (
@@ -85,8 +88,10 @@ class HorizonOrchestrator:
             self.console.print(f"📅 Fetching content since: {since.strftime('%Y-%m-%d %H:%M:%S')}\n")
 
             # 2. Fetch content from all sources
+            stage_started = perf_counter()
             all_items = await self.fetch_all_sources(since)
             self.console.print(f"📥 Fetched {len(all_items)} items from all sources\n")
+            self._print_stage_duration("Fetch", stage_started)
 
             if not all_items:
                 self.console.print("[yellow]No new content found. Exiting.[/yellow]")
@@ -101,8 +106,10 @@ class HorizonOrchestrator:
                 )
 
             # 4. Analyze with AI
+            stage_started = perf_counter()
             analyzed_items = await self._analyze_content(merged_items)
             self.console.print(f"🤖 Analyzed {len(analyzed_items)} items with AI\n")
+            self._print_stage_duration("AI analysis", stage_started)
 
             # 5. Filter by score threshold
             threshold = self.config.filtering.ai_score_threshold
@@ -117,6 +124,7 @@ class HorizonOrchestrator:
             )
 
             # 5.5 Semantic deduplication: drop items covering the same topic
+            stage_started = perf_counter()
             deduped_items = await self.merge_topic_duplicates(important_items)
             if len(deduped_items) < len(important_items):
                 self.console.print(
@@ -124,6 +132,7 @@ class HorizonOrchestrator:
                     f"→ {len(deduped_items)} unique items\n"
                 )
             important_items = deduped_items
+            self._print_stage_duration("Topic deduplication", stage_started)
 
             # 5.6 Optional second-stage Twitter reply expansion + targeted re-analysis
             await self._expand_twitter_discussion(important_items)
@@ -145,9 +154,12 @@ class HorizonOrchestrator:
             self.console.print("")
 
             # 6. Search related stories + enrich with background knowledge (2nd AI pass)
+            stage_started = perf_counter()
             await self._enrich_important_items(important_items)
+            self._print_stage_duration("Enrichment", stage_started)
 
             # 7. Generate and save daily summaries for each configured language
+            stage_started = perf_counter()
             run_time = datetime.now(timezone.utc).astimezone(ZoneInfo("Asia/Hong_Kong"))
             today = run_time.strftime("%Y-%m-%d")
             run_slot = run_time.strftime("%H%M")
@@ -212,6 +224,8 @@ class HorizonOrchestrator:
                         lang=lang,
                         summarizer=summarizer,
                     )
+            self._print_stage_duration("Summary generation and delivery", stage_started)
+            self._print_stage_duration("Total pipeline", run_started)
 
             self.console.print("[bold green]✅ Horizon completed successfully![/bold green]")
             usage = get_usage_snapshot()
@@ -248,6 +262,10 @@ class HorizonOrchestrator:
             hours = self.config.filtering.time_window_hours
             since = datetime.now(timezone.utc) - timedelta(hours=hours)
         return since
+
+    def _print_stage_duration(self, stage: str, started_at: float) -> None:
+        """Print elapsed wall-clock time for a pipeline stage."""
+        self.console.print(f"⏱️  {stage}: {perf_counter() - started_at:.1f}s\n")
 
     async def fetch_all_sources(self, since: datetime) -> List[ContentItem]:
         """Fetch content from all configured sources.
@@ -445,6 +463,7 @@ class HorizonOrchestrator:
             lines.append(f"[{i}] {item.title}\n    Tags: {tags}\n    Summary: {summary}")
         items_text = "\n\n".join(lines)
 
+        duplicate_groups = []
         try:
             ai_client = create_ai_client(self.config.ai)
             response = await ai_client.complete(
@@ -453,14 +472,17 @@ class HorizonOrchestrator:
             )
             result = parse_json_response(response)
             if result is None:
-                self.console.print("[yellow]  dedup: could not parse AI response, skipping[/yellow]")
-                return items
+                self.console.print("[yellow]  dedup: could not parse AI response; using tag fallback[/yellow]")
+            else:
+                duplicate_groups = result.get("duplicates", [])
 
-            duplicate_groups = result.get("duplicates", [])
         except Exception as e:
-            self.console.print(f"[yellow]  dedup: AI call failed ({e}), skipping[/yellow]")
-            return items
+            self.console.print(f"[yellow]  dedup: AI call failed ({e}); using tag fallback[/yellow]")
 
+        fallback_groups = self._find_high_confidence_tag_duplicates(items)
+        duplicate_groups = self._combine_duplicate_groups(
+            len(items), duplicate_groups, fallback_groups
+        )
         if not duplicate_groups:
             return items
 
@@ -491,6 +513,64 @@ class HorizonOrchestrator:
                 drop_indices.add(dup_idx)
 
         return [item for i, item in enumerate(items) if i not in drop_indices]
+
+    @staticmethod
+    def _find_high_confidence_tag_duplicates(items: List[ContentItem]) -> List[List[int]]:
+        """Find likely syndicated stories sharing three or more specific AI tags."""
+        generic_tags = {
+            "ai", "technology", "tech", "finance", "financial", "business",
+            "market", "marketanalysis", "news", "legal", "hardware",
+            "infrastructure", "software", "research",
+        }
+
+        def normalized_tags(item: ContentItem) -> set[str]:
+            return {
+                re.sub(r"[\W_]+", "", tag.casefold())
+                for tag in item.ai_tags
+                if re.sub(r"[\W_]+", "", tag.casefold()) not in generic_tags
+            }
+
+        tag_sets = [normalized_tags(item) for item in items]
+        return [
+            [first, second]
+            for first in range(len(items))
+            for second in range(first + 1, len(items))
+            if len(tag_sets[first] & tag_sets[second]) >= 3
+        ]
+
+    @staticmethod
+    def _combine_duplicate_groups(
+        item_count: int, *group_sets: List[List[int]]
+    ) -> List[List[int]]:
+        """Union valid duplicate groups so overlapping groups keep one primary."""
+        parent = list(range(item_count))
+
+        def find(index: int) -> int:
+            while parent[index] != index:
+                parent[index] = parent[parent[index]]
+                index = parent[index]
+            return index
+
+        def union(first: int, second: int) -> None:
+            first_root, second_root = find(first), find(second)
+            if first_root != second_root:
+                parent[second_root] = first_root
+
+        for groups in group_sets:
+            for group in groups or []:
+                valid = [
+                    index for index in group
+                    if isinstance(index, int) and 0 <= index < item_count
+                ]
+                if len(valid) < 2:
+                    continue
+                for index in valid[1:]:
+                    union(valid[0], index)
+
+        components: Dict[int, List[int]] = defaultdict(list)
+        for index in range(item_count):
+            components[find(index)].append(index)
+        return [group for group in components.values() if len(group) > 1]
 
     def apply_balanced_digest(
         self,

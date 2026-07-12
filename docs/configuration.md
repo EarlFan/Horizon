@@ -147,13 +147,15 @@ By default, AI scoring and enrichment run one item at a time. If your API endpoi
 {
   "ai": {
     "analysis_concurrency": 4,
-    "enrichment_concurrency": 2
+    "enrichment_concurrency": 2,
+    "enrichment_max_queries": 1
   }
 }
 ```
 
 - `analysis_concurrency`: Number of items scored in parallel. Default is `1`.
 - `enrichment_concurrency`: Number of high-scoring items enriched in parallel. Default is `1`.
+- `enrichment_max_queries`: Maximum background-search concepts per enriched item. Default is `3`; use `1` to reduce latency.
 - Both values are clamped to a minimum of `1`.
 - Preserve the existing retry behavior per item.
 - Result ordering is preserved regardless of concurrency.

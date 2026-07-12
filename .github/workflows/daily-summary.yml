@@ -3,7 +3,7 @@ name: Daily Horizon Summary
 on:
   schedule:
     - cron: '0 2 * * *'   # 10:00 Asia/Hong_Kong
-    - cron: '0 13 * * *'  # 21:00 Asia/Hong_Kong
+    - cron: '17 13 * * *' # 21:17 Asia/Hong_Kong; avoid GitHub Actions' top-of-hour queue
   workflow_dispatch:      # Allow manual trigger
 
 jobs:
@@ -23,6 +23,9 @@ jobs:
 
       - name: Install uv
         uses: astral-sh/setup-uv@v3
+        with:
+          enable-cache: true
+          cache-dependency-glob: uv.lock
 
       - name: Install dependencies
         run: uv sync --extra openbb
